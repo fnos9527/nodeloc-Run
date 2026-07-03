@@ -53,16 +53,59 @@ async function main() {
   let energyGained = null;
 
   try {
-    // 1. 打开登录页
-    await page.goto('https://nodeloc.com/login', { waitUntil: 'domcontentloaded' });
-    await page.waitForTimeout(1500);
+    // 1. 打开登录页（SPA站点，用 networkidle 等待JS完全渲染，失败则退化为 domcontentloaded）
+    try {
+      await page.goto('https://nodeloc.com/login', { waitUntil: 'networkidle', timeout: 30000 });
+    } catch (e) {
+      await page.goto('https://nodeloc.com/login', { waitUntil: 'domcontentloaded', timeout: 30000 });
+    }
 
-    // 2. 输入账号密码（根据截图中的输入框占位符定位）
-    await page.getByPlaceholder('电子邮件/用户名').fill(NODELOC_USER);
-    await page.getByPlaceholder('密码').fill(NODELOC_PASS);
+    // 密码框用 type="password" 定位，这是原生HTML属性，几乎不会因文案/样式变化而失效
+    await page.waitForSelector('input[type="password"]', { timeout: 20000 });
+    await page.screenshot({ path: path.join(DEBUG_DIR, '00-login-page.png'), fullPage: true });
 
-    // 3. 点击登录按钮
-    await page.getByRole('button', { name: '登录' }).click();
+    const passwordInput = page.locator('input[type="password"]').first();
+
+    // 2. 用户名/邮箱输入框：依次尝试多种定位方式，
+    // 因为"电子邮件/用户名"这行文字很可能是浮动标签(label)而不是真正的 placeholder 属性
+    const usernameCandidates = [
+      () => page.getByLabel('电子邮件/用户名'),
+      () => page.getByPlaceholder('电子邮件/用户名'),
+      () => page.locator('input[type="email"]').first(),
+      () => page.locator('input[type="text"]').first(),
+    ];
+
+    let usernameInput = null;
+    for (const getLocator of usernameCandidates) {
+      const loc = getLocator();
+      if ((await loc.count()) > 0 && (await loc.first().isVisible().catch(() => false))) {
+        usernameInput = loc.first();
+        break;
+      }
+    }
+    if (!usernameInput) {
+      await page.screenshot({ path: path.join(DEBUG_DIR, '00b-no-username-input.png'), fullPage: true });
+      throw new Error('未能定位用户名/邮箱输入框');
+    }
+
+    await usernameInput.fill(NODELOC_USER);
+    await passwordInput.fill(NODELOC_PASS);
+
+    // 3. 点击登录按钮：文本"登录"定位，找不到则兜底 type=submit
+    const loginButtonCandidates = [
+      () => page.getByRole('button', { name: '登录' }),
+      () => page.locator('button[type="submit"]').first(),
+    ];
+    let loginBtn = null;
+    for (const getLocator of loginButtonCandidates) {
+      const loc = getLocator();
+      if ((await loc.count()) > 0 && (await loc.first().isVisible().catch(() => false))) {
+        loginBtn = loc.first();
+        break;
+      }
+    }
+    if (!loginBtn) throw new Error('未能定位登录按钮');
+    await loginBtn.click();
 
     // 等待登录后跳转/渲染
     await page.waitForTimeout(4000);
