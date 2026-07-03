@@ -1,0 +1,12 @@
+{
+  "name": "nodeloc-checkin",
+  "version": "1.0.0",
+  "private": true,
+  "description": "NodeLoc 每日自动签到并通过 Telegram 通知结果",
+  "scripts": {
+    "checkin": "node scripts/checkin.js"
+  },
+  "dependencies": {
+    "playwright": "^1.47.0"
+  }
+}
