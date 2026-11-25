@@ -6,6 +6,11 @@ on:
     - cron: '0 17 * * *'
   workflow_dispatch: {}
 
+# 同一时间只跑一个，避免两次运行同时改写 Cookie
+concurrency:
+  group: nodeloc-checkin
+  cancel-in-progress: false
+
 jobs:
   checkin:
     runs-on: ubuntu-latest
@@ -26,11 +31,32 @@ jobs:
 
       - name: 执行签到脚本
         env:
+          # Cookie 登录（主要方式）：每次成功后会自动更新成最新的
+          NODELOC_COOKIE: ${{ secrets.NODELOC_COOKIE }}
+          # 账号密码（可选备用）：不填就只用 Cookie
           NODELOC_USER: ${{ secrets.NODELOC_USER }}
           NODELOC_PASS: ${{ secrets.NODELOC_PASS }}
           TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
         run: node scripts/checkin.js
+
+      - name: 保存最新 Cookie（下次运行自动使用）
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          if [ ! -s cookie_new.txt ]; then
+            echo "本次没有拿到有效的新 Cookie，保留原来的 NODELOC_COOKIE 不变"
+            exit 0
+          fi
+          if [ -z "$GH_TOKEN" ]; then
+            echo "⚠️ 未配置 GH_PAT，无法自动更新 NODELOC_COOKIE（Cookie 过期后需要手动更新）"
+          else
+            gh secret set NODELOC_COOKIE --repo "$GITHUB_REPOSITORY" < cookie_new.txt \
+              && echo "✅ 已把最新 Cookie 保存到 Secret NODELOC_COOKIE" \
+              || echo "⚠️ 更新 Secret 失败，请检查 GH_PAT 是否有本仓库 Secrets 的写权限"
+          fi
+          rm -f cookie_new.txt
 
       - name: 上传调试截图（便于排查问题）
         if: always()
