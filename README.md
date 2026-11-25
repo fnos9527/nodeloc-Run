@@ -2,8 +2,8 @@
 
    | Secret 名称       | 说明                                      |
    |--------------------|-------------------------------------------|
-   | `NODELOC_USER`     | xxx          |
-   | `NODELOC_PASS`     | xxx                      |
+   | `NODELOC_COOKIE`     | xxx          |
+   | `GH_PAT `     | 写回权限                     |
    | `TG_BOT_TOKEN`     | xxxxxx |
    | `TG_CHAT_ID`       | xxxxxx             |
 
